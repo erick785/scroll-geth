@@ -18,6 +18,8 @@ package eth
 
 import (
 	"math/big"
+	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -28,6 +30,10 @@ import (
 	"github.com/scroll-tech/go-ethereum/eth/protocols/eth"
 	"github.com/scroll-tech/go-ethereum/log"
 )
+
+func scrollExperimentObservesSync() bool {
+	return strings.TrimSpace(os.Getenv("SCROLL_DOWNLOADER_EXPERIMENT_OBSERVE_SYNC")) == "1"
+}
 
 const (
 	forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
@@ -177,6 +183,9 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		mode = downloader.SnapSync
 	}
 	op := peerToSyncOp(mode, peer)
+	if scrollExperimentObservesSync() {
+		log.Info("[DL-ATTACK-EXP] sync_candidate", "peer", peer.ID(), "head", op.head, "td", op.td, "localTD", ourTD)
+	}
 	if op.td.Cmp(ourTD) <= 0 {
 		return nil // We're in sync.
 	}
@@ -218,6 +227,10 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
+	syncStart := time.Now()
+	if scrollExperimentObservesSync() {
+		log.Info("[DL-ATTACK-EXP] sync_start", "peer", op.peer.ID(), "mode", op.mode, "head", op.head, "td", op.td)
+	}
 	if op.mode == downloader.FastSync || op.mode == downloader.SnapSync {
 		// Before launch the fast sync, we have to ensure user uses the same
 		// txlookup limit.
@@ -238,6 +251,9 @@ func (h *handler) doSync(op *chainSyncOp) error {
 	}
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
 	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
+	if scrollExperimentObservesSync() {
+		log.Info("[DL-ATTACK-EXP] sync_end", "peer", op.peer.ID(), "elapsed", time.Since(syncStart), "err", err)
+	}
 	if err != nil {
 		return err
 	}

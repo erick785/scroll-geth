@@ -50,6 +50,9 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	if handled, err := scrollExperimentSuppressHeaders(peer, &query); handled || err != nil {
+		return err
+	}
 	response := answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }
